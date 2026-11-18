@@ -140,7 +140,8 @@ const P=[
 ];
 const $=s=>document.getElementById(s),N=P.length;
 const V={c:$('vCover'),p:$('vPage'),e:$('vEnd')};
-let cur=-1,k=0,playing=false,tok=0,sentEls=[];
+let cur=-1,k=0,playing=false,tok=0,sentEls=[],mode='file',narPage=-2;
+const nar=new Audio();nar.preload='auto';
 const synth=window.speechSynthesis;
 $('cImg').src=IMG[0];
 function hashToIdx(){const h=location.hash.slice(1);if(h==='fim')return N;const m=/^p(\d+)$/.exec(h);return m&&+m[1]>=1&&+m[1]<=N?+m[1]-1:-1}
@@ -165,14 +166,14 @@ function render(){
 function voice(){const v=synth.getVoices();return v.find(x=>/^pt[-_]BR/i.test(x.lang)&&/Google|Luciana|Francisca|Microsoft|Maria|Felipe|Antonio/i.test(x.name))||v.find(x=>/^pt[-_]BR/i.test(x.lang))||v.find(x=>/^pt/i.test(x.lang))}
 function setPlay(on){playing=on;if(typeof applyVol==='function'&&typeof au!=='undefined')applyVol();$('bPlay').textContent=on?'Pausar':'Ouvir';$('bPlay').setAttribute('aria-label',on?'Pausar a narração':'Ouvir esta página')}
 function mark(i){sentEls.forEach((e,j)=>e.classList.toggle('on',j===i))}
-function stop(){tok++;if(synth)synth.cancel();mark(-1);setPlay(false)}
-function speak(from){
+function stop(){tok++;if(synth)synth.cancel();nar.pause();narPage=-2;mark(-1);setPlay(false)}
+function speakTTS(from){
  if(!synth||cur<0||cur>=N)return;
- synth.cancel();const my=++tok,list=sents(P[cur].t);k=from||0;setPlay(true);
+ synth.cancel();mode='tts';nar.pause();const my=++tok,list=sents(P[cur].t);k=from||0;setPlay(true);
  (function next(){
   if(my!==tok)return;
   if(k>=list.length){mark(-1);setPlay(false);k=0;
-   if($('oAuto').checked)setTimeout(()=>{if(my===tok){go(cur+1);if(cur<N)setTimeout(()=>speak(0),400)}},900);return}
+   if($('oAuto').checked)setTimeout(()=>{if(my===tok){go(cur+1);if(cur<N)setTimeout(()=>speak(),400)}},900);return}
   const u=new SpeechSynthesisUtterance(list[k].trim().replace(/\bSr\b\.?/g,'Senhor'));
   u.lang='pt-BR';const v=voice();if(v)u.voice=v;u.rate=$('oSlow').checked?.7:.9;u.pitch=1.05;
   u.onstart=()=>{if(my===tok)mark(k)};
@@ -181,14 +182,34 @@ function speak(from){
   synth.speak(u);
  })();
 }
-$('bPlay').onclick=()=>{if(playing){const at=k;stop();k=at}else speak(k)};
-$('bNext').onclick=()=>{const was=playing;go(cur+1);if(was&&cur<N)speak(0)};
-$('bPrev').onclick=()=>{const was=playing;go(cur-1);if(was&&cur>=0)speak(0)};
-$('bListen').onclick=()=>{$('oAuto').checked=true;go(0);speak(0)};
+
+/* ===== Narração gravada (voz única); se o arquivo falhar, usa a voz do aparelho ===== */
+const NF=i=>'audio/narracao/'+String(i+1).padStart(2,'0')+'.mp3';
+function speak(){
+ if(cur<0||cur>=N)return;
+ tok++;if(synth)synth.cancel();
+ mode='file';narPage=cur;nar.src=NF(cur);nar.playbackRate=$('oSlow').checked?.85:1;setPlay(true);
+ nar.play().catch(()=>{if(mode==='file'&&playing){synth?speakTTS(0):setPlay(false)}});
+}
+nar.addEventListener('timeupdate',()=>{
+ if(mode!=='file'||narPage!==cur||!nar.duration||cur<0||cur>=N)return;
+ const L=sents(P[cur].t).map(s=>s.length),tot=L.reduce((a,b)=>a+b,0),pos=nar.currentTime/nar.duration*tot;
+ let acc=0,idx=L.length-1;for(let i=0;i<L.length;i++){acc+=L[i];if(pos<acc){idx=i;break}}mark(idx);
+});
+nar.addEventListener('ended',()=>{
+ if(mode!=='file'||narPage!==cur)return;
+ mark(-1);setPlay(false);const my=tok;
+ if($('oAuto').checked&&cur<N)setTimeout(()=>{if(my===tok){go(cur+1);if(cur<N)setTimeout(()=>speak(),400)}},900);
+});
+nar.addEventListener('error',()=>{if(mode==='file'&&playing){synth?speakTTS(0):setPlay(false)}});
+$('oSlow').addEventListener('change',()=>{if(mode==='file')nar.playbackRate=$('oSlow').checked?.85:1});
+$('bPlay').onclick=()=>{if(playing){if(mode==='file'){nar.pause();setPlay(false)}else{const at=k;stop();k=at}}else if(mode==='file'&&narPage===cur&&nar.currentTime>0&&!nar.ended){setPlay(true);nar.play().catch(()=>{})}else speak()};
+$('bNext').onclick=()=>{const was=playing;go(cur+1);if(was&&cur<N)speak()};
+$('bPrev').onclick=()=>{const was=playing;go(cur-1);if(was&&cur>=0)speak()};
+$('bListen').onclick=()=>{$('oAuto').checked=true;go(0);speak()};
 $('bRead').onclick=()=>go(0);
-$('bAgain').onclick=()=>{$('oAuto').checked=true;go(0);speak(0)};
+$('bAgain').onclick=()=>{$('oAuto').checked=true;go(0);speak()};
 $('bCover').onclick=()=>go(-1);
-if(!synth||typeof SpeechSynthesisUtterance==='undefined'){$('bListen').hidden=true;$('bPlay').hidden=true;$('bRead').classList.add('main')}
 if(synth)synth.onvoiceschanged=()=>{};
 
 /* ===== Músicas ===== */
