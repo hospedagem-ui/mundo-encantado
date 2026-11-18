@@ -54,6 +54,23 @@ h1,h2{font-family:Inter,system-ui,sans-serif;line-height:1.15;margin:0}
  #bar .in{justify-content:center}
 }
 @media (prefers-reduced-motion:no-preference){.fig img{animation:f .5s ease}@keyframes f{from{opacity:0}to{opacity:1}}}
+
+/* músicas */
+#mBtn{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:12px;z-index:20;background:var(--paper);padding:8px 16px}
+#mBtn.on{background:var(--acc);color:var(--onacc)}
+#mPanel{position:fixed;top:calc(62px + env(safe-area-inset-top,0px));right:12px;z-index:20;width:min(390px,calc(100vw - 24px));max-height:calc(100vh - 90px);overflow:auto;background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:0 14px 40px rgba(10,40,30,.3)}
+#mPanel[hidden]{display:none}
+#mPanel h2{font-size:1.2rem;margin-bottom:4px}
+#mNow{font-weight:600;margin:6px 0}
+#mPanel .r{display:flex;align-items:center;gap:10px;margin:10px 0}
+#mPanel input[type=range]{flex:1;accent-color:var(--acc);min-width:0}
+#mPanel .t{font-size:.9rem;color:var(--mute);min-width:2.6em}
+#mPanel select{font:inherit;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:6px 8px;flex:1}
+#mPanel label{display:flex;gap:8px;align-items:center;font-size:1rem}
+#mList{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:6px}
+#mList button{width:100%;text-align:left;border-radius:12px;border-width:1px;padding:9px 12px}
+#mList button[aria-current="true"]{background:var(--hl);color:var(--ink);border-color:var(--hl)}
+.mnote{font-size:.9rem;color:var(--mute);margin:8px 0 0}
 </style>
 </head>
 <body>
@@ -79,6 +96,18 @@ h1,h2{font-family:Inter,system-ui,sans-serif;line-height:1.15;margin:0}
   <div class="row"><button class="btn main" id="bAgain">Ouvir de novo</button><button class="btn" id="bCover">Voltar à capa</button></div>
  </section>
 </main>
+<button class="btn" id="mBtn" aria-expanded="false" aria-controls="mPanel">♪ Músicas</button>
+<section id="mPanel" hidden aria-label="Player de músicas">
+ <div class="r" style="justify-content:space-between;margin-top:0"><h2>Músicas do Infância Memorável</h2><button class="btn" id="mClose" aria-label="Fechar player de músicas">Fechar</button></div>
+ <div id="mNow">Escolha uma música</div>
+ <div class="r"><button class="btn" id="mPrev" aria-label="Música anterior">⏮</button><button class="btn main" id="mPlay" aria-label="Tocar música">▶ Tocar</button><button class="btn" id="mNext" aria-label="Próxima música">⏭</button></div>
+ <div class="r"><span class="t" id="mCur">0:00</span><input type="range" id="mSeek" min="0" max="100" value="0" step="1" aria-label="Posição da música"><span class="t" id="mDur">0:00</span></div>
+ <div class="r" id="mVolRow"><label for="mVol">Volume</label><input type="range" id="mVol" min="0" max="100" value="60" aria-label="Volume da música"></div>
+ <div class="r"><label for="mMode">Ao terminar</label><select id="mMode"><option value="seq">Tocar a próxima</option><option value="one">Repetir esta</option><option value="shuf">Aleatória</option></select></div>
+ <label id="mDuckRow"><input type="checkbox" id="mDuck" checked> Baixar a música enquanto a história é narrada</label>
+ <p class="mnote" id="mIos" hidden>No iPhone e iPad, ajuste o volume pelos botões do aparelho.</p>
+ <ul id="mList"></ul>
+</section>
 <nav id="bar" aria-label="Controles do livro" hidden>
  <div class="in">
   <div id="prog"><i></i></div>
@@ -134,7 +163,7 @@ function render(){
  window.scrollTo(0,0);
 }
 function voice(){const v=synth.getVoices();return v.find(x=>/^pt[-_]BR/i.test(x.lang)&&/Google|Luciana|Francisca|Microsoft|Maria|Felipe|Antonio/i.test(x.name))||v.find(x=>/^pt[-_]BR/i.test(x.lang))||v.find(x=>/^pt/i.test(x.lang))}
-function setPlay(on){playing=on;$('bPlay').textContent=on?'Pausar':'Ouvir';$('bPlay').setAttribute('aria-label',on?'Pausar a narração':'Ouvir esta página')}
+function setPlay(on){playing=on;if(typeof applyVol==='function'&&typeof au!=='undefined')applyVol();$('bPlay').textContent=on?'Pausar':'Ouvir';$('bPlay').setAttribute('aria-label',on?'Pausar a narração':'Ouvir esta página')}
 function mark(i){sentEls.forEach((e,j)=>e.classList.toggle('on',j===i))}
 function stop(){tok++;if(synth)synth.cancel();mark(-1);setPlay(false)}
 function speak(from){
@@ -161,10 +190,51 @@ $('bAgain').onclick=()=>{$('oAuto').checked=true;go(0);speak(0)};
 $('bCover').onclick=()=>go(-1);
 if(!synth||typeof SpeechSynthesisUtterance==='undefined'){$('bListen').hidden=true;$('bPlay').hidden=true;$('bRead').classList.add('main')}
 if(synth)synth.onvoiceschanged=()=>{};
+
+/* ===== Músicas ===== */
+const TR=[
+{t:"O Mundo da Infância Memorável",f:"audio/o-mundo-da-infancia-memoravel.mp3"},
+{t:"A Barragem do Acolhimento",f:"audio/a-barragem-do-acolhimento.mp3"},
+{t:"O Rio da Experiência",f:"audio/o-rio-da-experiencia.mp3"},
+{t:"A Ponte de Troncos",f:"audio/a-ponte-de-troncos.mp3"},
+{t:"Infância Memorável (Tema da Surpresa) – versão A",f:"audio/tema-da-surpresa-a.mp3"},
+{t:"Infância Memorável (Tema da Surpresa) – versão B",f:"audio/tema-da-surpresa-b.mp3"}
+];
+const au=new Audio();au.preload='none';
+let ti=0,vol=.6,loaded=false;
+try{const v=localStorage.getItem('ie-vol');if(v!==null)vol=Math.min(1,Math.max(0,+v))}catch(e){}
+$('mVol').value=Math.round(vol*100);
+au.volume=.5;const volOk=Math.abs(au.volume-.5)<.01;
+if(!volOk){$('mVolRow').hidden=true;$('mDuckRow').hidden=true;$('mIos').hidden=false}
+function applyVol(){if(!volOk)return;au.volume=Math.min(1,vol*(playing&&$('mDuck').checked?.3:1))}
+function fmt(s){if(!isFinite(s))return'0:00';s=Math.floor(s);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+function mUI(){
+ const on=!au.paused;
+ $('mPlay').textContent=on?'⏸ Pausar':'▶ Tocar';$('mPlay').setAttribute('aria-label',on?'Pausar música':'Tocar música');
+ $('mBtn').classList.toggle('on',on);$('mBtn').textContent=on?'♪ Tocando':'♪ Músicas';
+ $('mNow').textContent=loaded?TR[ti].t:'Escolha uma música';
+ [...$('mList').children].forEach((li,i)=>li.firstChild.setAttribute('aria-current',loaded&&i===ti?'true':'false'));
+}
+function mLoad(i,play){ti=(i+TR.length)%TR.length;au.src=TR[ti].f;loaded=true;$('mSeek').value=0;$('mCur').textContent='0:00';$('mDur').textContent='0:00';applyVol();mUI();if(play)au.play().catch(()=>{mUI()})}
+TR.forEach((t,i)=>{const li=document.createElement('li'),b=document.createElement('button');b.type='button';b.textContent=(i+1)+'. '+t.t;b.onclick=()=>mLoad(i,true);li.appendChild(b);$('mList').appendChild(li)});
+$('mBtn').onclick=()=>{const p=$('mPanel');p.hidden=!p.hidden;$('mBtn').setAttribute('aria-expanded',String(!p.hidden))};
+$('mClose').onclick=()=>{$('mPanel').hidden=true;$('mBtn').setAttribute('aria-expanded','false');$('mBtn').focus()};
+$('mPlay').onclick=()=>{if(!loaded){mLoad(0,true);return}au.paused?au.play().catch(()=>{}):au.pause()};
+$('mNext').onclick=()=>mLoad(ti+1,true);
+$('mPrev').onclick=()=>{if(loaded&&au.currentTime>3)au.currentTime=0;else mLoad(ti-1,true)};
+$('mVol').oninput=e=>{vol=e.target.value/100;try{localStorage.setItem('ie-vol',vol)}catch(x){}applyVol()};
+$('mDuck').onchange=applyVol;
+$('mSeek').oninput=e=>{if(au.duration)au.currentTime=e.target.value/100*au.duration};
+au.addEventListener('play',mUI);au.addEventListener('pause',mUI);
+au.addEventListener('loadedmetadata',()=>{$('mDur').textContent=fmt(au.duration)});
+au.addEventListener('timeupdate',()=>{$('mCur').textContent=fmt(au.currentTime);if(au.duration&&document.activeElement!==$('mSeek'))$('mSeek').value=au.currentTime/au.duration*100});
+au.addEventListener('ended',()=>{const m=$('mMode').value;if(m==='one'){au.currentTime=0;au.play()}else if(m==='shuf'){let n=ti;if(TR.length>1)while(n===ti)n=Math.floor(Math.random()*TR.length);mLoad(n,true)}else mLoad(ti+1,true)});
+au.addEventListener('error',()=>{$('mNow').textContent='Não foi possível carregar esta música.'});
+mUI();
 addEventListener('hashchange',()=>{if(hashToIdx()!==cur)render()});
 addEventListener('keydown',e=>{if(e.target.matches('input'))return;if(e.key==='ArrowRight'&&cur<N)$('bNext').click();if(e.key==='ArrowLeft'&&cur>=0)$('bPrev').click();if(e.key===' '&&cur>=0&&cur<N&&!e.target.matches('button')){e.preventDefault();$('bPlay').click()}});
-let tx=0;addEventListener('touchstart',e=>{tx=e.changedTouches[0].clientX},{passive:true});
-addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-tx;if(Math.abs(d)>70&&cur>=0){d<0?$('bNext').click():$('bPrev').click()}},{passive:true});
+let tx=0;let skip=false;addEventListener('touchstart',e=>{skip=!!e.target.closest('#mPanel,#mBtn');tx=e.changedTouches[0].clientX},{passive:true});
+addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-tx;if(!skip&&Math.abs(d)>70&&cur>=0){d<0?$('bNext').click():$('bPrev').click()}},{passive:true});
 addEventListener('pagehide',stop);
 render();
 </script>
