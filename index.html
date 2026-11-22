@@ -30,8 +30,9 @@ h1,h2{font-family:Inter,system-ui,sans-serif;line-height:1.15;margin:0}
 .row{display:flex;flex-wrap:wrap;gap:12px}
 /* página */
 .spread{position:relative;perspective:2200px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:36px;align-items:center;min-height:calc(100vh - 190px)}
-.fig img{aspect-ratio:900/1308;object-fit:cover}
-.txt{background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:clamp(22px,4vw,48px);font-size:clamp(1.3rem,2.3vw,1.75rem);line-height:1.65}
+.fig{display:flex;justify-content:center}
+.fig img{width:auto;max-width:100%;height:auto;max-height:calc(100vh - 150px);max-height:calc(100dvh - 150px)}
+.txt{background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:clamp(22px,4vw,48px);font-size:clamp(1.15rem,min(2.3vw,3.6vh),1.75rem);line-height:1.65}
 .s{padding:2px 0;border-radius:6px;-webkit-box-decoration-break:clone;box-decoration-break:clone;transition:background .2s}
 .s.on{background:var(--hl)}
 .end{text-align:center;max-width:620px;margin:10vh auto}
@@ -50,7 +51,7 @@ h1,h2{font-family:Inter,system-ui,sans-serif;line-height:1.15;margin:0}
 @media (max-width:760px){
  main{padding:14px 14px 190px}
  .cover,.spread{grid-template-columns:1fr;gap:20px;min-height:0}
- .fig img{aspect-ratio:4/3}
+ .fig img{max-height:60vh;max-height:60dvh}
  #bar .in{justify-content:center}
 }
 @media (prefers-reduced-motion:no-preference){.fig img{animation:f .5s ease}@keyframes f{from{opacity:0}to{opacity:1}}}
@@ -76,8 +77,8 @@ h1,h2{font-family:Inter,system-ui,sans-serif;line-height:1.15;margin:0}
 .flip{position:absolute;z-index:5;pointer-events:none;transform-style:preserve-3d;will-change:transform}
 .flip .face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:22px;overflow:hidden;box-shadow:0 10px 36px rgba(10,40,30,.28)}
 .flip .face.back{transform:rotateY(180deg)}
-.flip .face>img{width:100%;height:100%;object-fit:cover;display:block;border-radius:22px}
-.flip .face>.txt{width:100%;margin:0}
+.flip .face>img{display:block;border-radius:22px;max-width:100%;box-shadow:0 10px 30px rgba(10,40,30,.25)}
+.flip .face>.txt{margin:0}
 .flip.m .face{display:block;padding:0;overflow:hidden}
 </style>
 </head>
@@ -112,6 +113,7 @@ h1,h2{font-family:Inter,system-ui,sans-serif;line-height:1.15;margin:0}
  <div class="r"><span class="t" id="mCur">0:00</span><input type="range" id="mSeek" min="0" max="100" value="0" step="1" aria-label="Posição da música"><span class="t" id="mDur">0:00</span></div>
  <div class="r" id="mVolRow"><label for="mVol">Volume</label><input type="range" id="mVol" min="0" max="100" value="60" aria-label="Volume da música"></div>
  <div class="r"><label for="mMode">Ao terminar</label><select id="mMode"><option value="seq">Tocar a próxima</option><option value="one">Repetir esta</option><option value="shuf">Aleatória</option></select></div>
+ <label class="sfxrow"><input type="checkbox" id="oSfx" checked> Som de virada de página</label>
  <label id="mDuckRow"><input type="checkbox" id="mDuck" checked> Baixar a música enquanto a história é narrada</label>
  <p class="mnote" id="mIos" hidden>No iPhone e iPad, ajuste o volume pelos botões do aparelho.</p>
  <ul id="mList"></ul>
@@ -155,21 +157,29 @@ $('cImg').src=IMG[0];
 function hashToIdx(){const h=location.hash.slice(1);if(h==='fim')return N;const m=/^p(\d+)$/.exec(h);return m&&+m[1]>=1&&+m[1]<=N?+m[1]-1:-1}
 function go(n){const h=n<0?'inicio':n>=N?'fim':'p'+(n+1);location.hash=h;render()}
 function sents(t){return t.match(/[^.!?]+[.!?]+[”"]?[.,]?\s*|[^.!?]+$/g)||[t]}
+
+/* ===== Som de virada de página ===== */
+const SF=['audio/sfx/virada-1.mp3','audio/sfx/virada-2.mp3'].map(u=>{const a=new Audio(u);a.preload='auto';a.volume=.7;a.onended=()=>{a._real=false};return a});
+try{if(localStorage.getItem('ie-sfx')==='0')$('oSfx').checked=false}catch(e){}
+$('oSfx').onchange=()=>{try{localStorage.setItem('ie-sfx',$('oSfx').checked?'1':'0')}catch(e){}};
+function playSfx(){if(!$('oSfx').checked)return;const a=SF[Math.random()<.5?0:1];SF.forEach(x=>{if(x!==a&&x._real){x.pause();x._real=false}});try{a.muted=false;a._real=true;a.currentTime=0;a.play().catch(()=>{a._real=false})}catch(e){}}
+addEventListener('pointerdown',()=>{SF.forEach(a=>{a.muted=true;a.play().then(()=>{if(!a._real){a.pause();a.currentTime=0}a.muted=false}).catch(()=>{a.muted=false})})},{once:true});
 let finTurn=null;
 function buildText(i,box){const d=P[i],els=[];box.textContent='';
  sents(d.t).forEach(t=>{const e=document.createElement('span');e.className='s';e.textContent=t;box.appendChild(e);els.push(e)});
  if(d.cut){const e=document.createElement('span');e.textContent='…';box.appendChild(e)}
  return els}
-function setImage(i){$('pImg').src=IMG[i+1];$('pImg').alt=P[i].a}
+function setImage(i){const im=$('pImg');im.src=IMG[i+1];im.alt=P[i].a}
 function setText(i){sentEls=buildText(i,$('txt'))}
 function strip(n){n.removeAttribute('id');n.removeAttribute('aria-live');n.querySelectorAll('[id]').forEach(x=>x.removeAttribute('id'));return n}
 function turn(prev,i,dir){
+ playSfx();
  const sp=V.p,sr=sp.getBoundingClientRect(),mob=matchMedia('(max-width:760px)').matches;
  const fr=$('pImg').getBoundingClientRect(),tr=$('txt').getBoundingClientRect();
  const f=document.createElement('div');f.className='flip';
  const face=(c)=>{const x=document.createElement('div');x.className='face'+(c?' '+c:'');return x};
- let frames,done;
  const px=(v)=>v+'px';
+ let frames,done;
  if(mob){
   f.classList.add('m');const a=face();
   const fig=strip(sp.querySelector('figure').cloneNode(true)),art=strip($('txt').cloneNode(true));
@@ -178,21 +188,21 @@ function turn(prev,i,dir){
   setImage(i);setText(i);
   const sg=dir>0?-1:1;frames=[{transform:'rotateY(0deg)',opacity:1},{transform:'rotateY('+(60*sg)+'deg)',opacity:.95,offset:.6},{transform:'rotateY('+(100*sg)+'deg)',opacity:0}];
   done=()=>{};
- }else if(dir>0){
-  const gap=tr.left-fr.right,a=face(),b=face('back'),oldT=strip($('txt').cloneNode(true));
-  a.appendChild(oldT);const im=document.createElement('img');im.src=IMG[i+1];im.alt='';b.appendChild(im);f.append(a,b);
-  Object.assign(f.style,{left:px(tr.left-sr.left),top:px(fr.top-sr.top),width:px(tr.width),height:px(fr.height),transformOrigin:px(-gap/2)+' 50%'});
-  setText(i);
-  frames=[{transform:'rotateY(0deg)'},{transform:'rotateY(-180deg)'}];
-  done=()=>setImage(i);
  }else{
-  const gap=tr.left-fr.right,a=face(),b=face('back');
-  const im=document.createElement('img');im.src=IMG[prev+1];im.alt='';a.appendChild(im);
-  const t=document.createElement('article');t.className='txt';buildText(i,t);b.appendChild(t);f.append(a,b);
-  Object.assign(f.style,{left:px(fr.left-sr.left),top:px(fr.top-sr.top),width:px(fr.width),height:px(fr.height),transformOrigin:px(fr.width+gap/2)+' 50%'});
-  setImage(i);
-  frames=[{transform:'rotateY(0deg)'},{transform:'rotateY(180deg)'}];
-  done=()=>setText(i);
+  const G=36,W=tr.width,top=Math.min(fr.top,tr.top),H=Math.max(fr.bottom,tr.bottom)-top;
+  const putImg=(src)=>{const im=document.createElement('img');im.src=src;im.alt='';Object.assign(im.style,{position:'absolute',top:px(fr.top-top),height:px(fr.height),width:'auto',left:'50%',transform:'translateX(-50%)'});return im};
+  const putTxt=(el)=>{Object.assign(el.style,{position:'absolute',top:px(tr.top-top),left:'0',width:'100%'});return el};
+  const a=face(),b=face('back');
+  if(dir>0){
+   a.appendChild(putTxt(strip($('txt').cloneNode(true))));b.appendChild(putImg(IMG[i+1]));f.append(a,b);
+   Object.assign(f.style,{left:px(tr.left-sr.left),top:px(top-sr.top),width:px(W),height:px(H),transformOrigin:px(-G/2)+' 50%'});
+   setText(i);frames=[{transform:'rotateY(0deg)'},{transform:'rotateY(-180deg)'}];done=()=>setImage(i);
+  }else{
+   const t=document.createElement('article');t.className='txt';buildText(i,t);
+   a.appendChild(putImg(IMG[prev+1]));b.appendChild(putTxt(t));f.append(a,b);
+   Object.assign(f.style,{left:px(tr.left-G-W-sr.left),top:px(top-sr.top),width:px(W),height:px(H),transformOrigin:px(W+G/2)+' 50%'});
+   setImage(i);frames=[{transform:'rotateY(0deg)'},{transform:'rotateY(180deg)'}];done=()=>setText(i);
+  }
  }
  sp.appendChild(f);
  const an=f.animate(frames,{duration:800,easing:'cubic-bezier(.55,.05,.25,1)',fill:'forwards'});
